@@ -13,6 +13,11 @@ const response = (statusCode, message) => {
   };
 };
 
+const sortByDate = (a, b) => {
+  if (a.createdAt > b.createdAt) return -1;
+  return 1;
+};
+
 module.exports.createPost = (event, context, callback) => {
   const reqBody = JSON.parse(event.body);
 
@@ -33,5 +38,51 @@ module.exports.createPost = (event, context, callback) => {
     .then(() => {
       callback(null, response(201, post));
     })
-    .catch(err => response(null, response(err.statusCode, err)));
+    .catch(err => callback(null, response(err.statusCode, err)));
+};
+
+module.exports.getAllPosts = (event, context, callback) => {
+  return db
+    .scan({
+      TableName: postsTable,
+    })
+    .promise()
+    .then(res => {
+      callback(null, res.Items.sort(sortByDate));
+    })
+    .catch(err => callback(null, response(err.statusCode, err)));
+};
+
+module.exports.getPosts = (event, context, callback) => {
+  const numOfPosts = event.pathParameters.number;
+  const params = {
+    Table: postsTable,
+    Limit: numOfPosts,
+  };
+  return db
+    .scan(params)
+    .promise()
+    .then(res => {
+      callback(null, res.Items.sort(sortByDate));
+    })
+    .catch(err => callback(null, response(err.statusCode, err)));
+};
+
+module.exports.getPost = (event, context, callback) => {
+  const id = event.pathParameters.id;
+  const params = {
+    Key: {
+      id,
+    },
+    TableName: postsTable,
+  };
+
+  return db
+    .get(params)
+    .promise()
+    .then(res => {
+      if (res.Item) return callback(null, res.Item);
+      return callback(null, response(404, { error: 'Post not found' }));
+    })
+    .catch(err => callback(null, response(err.statusCode, err)));
 };
