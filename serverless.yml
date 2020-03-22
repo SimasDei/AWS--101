@@ -1,46 +1,46 @@
-service: aws-101
+service: sls
 
 custom:
   settings:
-    POST_TABLE: posts
+    POSTS_TABLE: posts
 
 provider:
   name: aws
   runtime: nodejs12.x
-  environment: $(self:custom.settings)
   region: eu-central-1
+  environment: ${self:custom.settings}
   iamRoleStatements:
     - Effect: 'Allow'
       Action:
-        - dynamodb: DescribeTable
-        - dynamodb: Scan
-        - dynamodb: GetItem
-        - dynamodb: PutItem
-        - dynamodb: UpdateItem
-        - dynamodb: DeleteItem
+        - dynamodb:DescribeTable
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
       Resource:
-        - 'arn:aws.dynamodb.$(self.provider.region):*:table/$(self:custom.settings.POST_TABLE)'
+        - 'arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.settings.POSTS_TABLE}'
 
 functions:
   createPost:
-    handler: handler.hello
+    handler: handler.createPost
     events:
       - http:
-        path: /post
-        method: post
+          path: /post
+          method: post
 
 resources:
   Resources:
     PostsTable:
-      type: AWS::Dynamodb::Table
+      Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
           - AttributeName: 'id'
             AttributeType: 'S'
         KeySchema:
           - AttributeName: 'id'
-          KeyType: 'HASH'
+            KeyType: 'HASH'
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-          TableName: $(self:custom.settings.POSTS_TABLE)
+        TableName: ${self:custom.settings.POSTS_TABLE}
