@@ -2,24 +2,38 @@
 const AWS = require('aws-sdk');
 const uuid = require('uuid/v4');
 
-const db = new AWS.DynamoDB.documentClient();
+const db = new AWS.DynamoDB.DocumentClient();
 
-const postsTable = process.env.POST_TABLE;
-
-const response = (statusCode, message) => {
+const postsTable = process.env.POSTS_TABLE;
+// Create a response
+function response(statusCode, message) {
   return {
-    statusCode,
+    statusCode: statusCode,
     body: JSON.stringify(message),
   };
-};
-
-const sortByDate = (a, b) => {
-  if (a.createdAt > b.createdAt) return -1;
-  return 1;
-};
-
+}
+function sortByDate(a, b) {
+  if (a.createdAt > b.createdAt) {
+    return -1;
+  } else return 1;
+}
+// Create a post
 module.exports.createPost = (event, context, callback) => {
   const reqBody = JSON.parse(event.body);
+
+  if (
+    !reqBody.title ||
+    reqBody.title.trim() === '' ||
+    !reqBody.body ||
+    reqBody.body.trim() === ''
+  ) {
+    return callback(
+      null,
+      response(400, {
+        error: 'Post must have a title and body and they must not be empty',
+      }),
+    );
+  }
 
   const post = {
     id: uuid(),
@@ -38,37 +52,42 @@ module.exports.createPost = (event, context, callback) => {
     .then(() => {
       callback(null, response(201, post));
     })
-    .catch(err => callback(null, response(err.statusCode, err)));
+    .catch(err => response(null, response(err.statusCode, err)));
 };
-
+// Get all posts
 module.exports.getAllPosts = (event, context, callback) => {
   return db
     .scan({
       TableName: postsTable,
     })
     .promise()
-    .then(res => callback(null, res.Items.sort(sortByDate)))
+    .then(res => {
+      callback(null, response(200, res.Items.sort(sortByDate)));
+    })
     .catch(err => callback(null, response(err.statusCode, err)));
 };
-
+// Get number of posts
 module.exports.getPosts = (event, context, callback) => {
-  const numOfPosts = event.pathParameters.number;
+  const numberOfPosts = event.pathParameters.number;
   const params = {
-    Table: postsTable,
-    Limit: numOfPosts,
+    TableName: postsTable,
+    Limit: numberOfPosts,
   };
   return db
     .scan(params)
     .promise()
-    .then(res => callback(null, res.Items.sort(sortByDate)))
+    .then(res => {
+      callback(null, response(200, res.Items.sort(sortByDate)));
+    })
     .catch(err => callback(null, response(err.statusCode, err)));
 };
-
+// Get a single post
 module.exports.getPost = (event, context, callback) => {
   const id = event.pathParameters.id;
+
   const params = {
     Key: {
-      id,
+      id: id,
     },
     TableName: postsTable,
   };
@@ -77,47 +96,53 @@ module.exports.getPost = (event, context, callback) => {
     .get(params)
     .promise()
     .then(res => {
-      if (res.Item) return callback(null, res.Item);
-      return callback(null, response(404, { error: 'Post not found' }));
+      if (res.Item) callback(null, response(200, res.Item));
+      else callback(null, response(404, { error: 'Post not found' }));
     })
     .catch(err => callback(null, response(err.statusCode, err)));
 };
-
+// Update a post
 module.exports.updatePost = (event, context, callback) => {
   const id = event.pathParameters.id;
-  const { paramName, paramValue } = JSON.parse(event.body);
+  const reqBody = JSON.parse(event.body);
+  const { body, title } = reqBody;
+
   const params = {
     Key: {
-      id,
+      id: id,
     },
     TableName: postsTable,
     ConditionExpression: 'attribute_exists(id)',
-    UpdateExpressiont: `set ${paramName} = :v`,
-    ExpressiontAttributeValues: {
-      ':v': paramValue,
+    UpdateExpression: 'SET title = :title, body = :body',
+    ExpressionAttributeValues: {
+      ':title': title,
+      ':body': body,
     },
-    ReturnValue: 'All_NEW',
+    ReturnValues: 'ALL_NEW',
   };
+  console.log('Updating');
 
   return db
     .update(params)
     .promise()
-    .then(res => callback(null, response(200, res)))
+    .then(res => {
+      console.log(res);
+      callback(null, response(200, res.Attributes));
+    })
     .catch(err => callback(null, response(err.statusCode, err)));
 };
-
+// Delete a post
 module.exports.deletePost = (event, context, callback) => {
   const id = event.pathParameters.id;
   const params = {
     Key: {
-      id,
+      id: id,
     },
     TableName: postsTable,
   };
-
   return db
     .delete(params)
     .promise()
-    .then(() => callback(null, response(200, { message: 'Successfully deleted' })))
+    .then(() => callback(null, response(200, { message: 'Post deleted successfully' })))
     .catch(err => callback(null, response(err.statusCode, err)));
 };
